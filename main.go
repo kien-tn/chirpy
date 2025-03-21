@@ -38,19 +38,19 @@ func main() {
 	fmt.Fprintln(os.Stdout, "Hitting:", apiCfg.fileserverHits.Load())
 	mux := http.NewServeMux()
 	mux.Handle("/app/", http.StripPrefix("/app", middlewareLog(apiCfg.middlewareMetricsInc(http.FileServer(http.Dir("."))))))
-	mux.Handle("/healthz", middlewareLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("GET /healthz", middlewareLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ContentType
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})))
-	mux.Handle("/metrics", middlewareLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("GET /metrics", middlewareLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ContentType
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Hits: " + strconv.Itoa(int(apiCfg.fileserverHits.Load()))))
 	})))
-	mux.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /reset", func(w http.ResponseWriter, r *http.Request) {
 		apiCfg.fileserverHits.Store(0)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
