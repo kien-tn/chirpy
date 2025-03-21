@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -25,23 +26,30 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
+func middlewareLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s %s", r.Method, r.URL.Path)
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	apiCfg := &apiConfig{}
 	fmt.Fprintln(os.Stdout, "Hitting:", apiCfg.fileserverHits.Load())
 	mux := http.NewServeMux()
-	mux.Handle("/app/", http.StripPrefix("/app", apiCfg.middlewareMetricsInc(http.FileServer(http.Dir(".")))))
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/app/", http.StripPrefix("/app", middlewareLog(apiCfg.middlewareMetricsInc(http.FileServer(http.Dir("."))))))
+	mux.Handle("/healthz", middlewareLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ContentType
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
-	})
-	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+	})))
+	mux.Handle("/metrics", middlewareLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ContentType
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Hits: " + strconv.Itoa(int(apiCfg.fileserverHits.Load()))))
-	})
+	})))
 	mux.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
 		apiCfg.fileserverHits.Store(0)
 		w.WriteHeader(http.StatusOK)
