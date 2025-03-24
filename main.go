@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync/atomic"
 )
 
@@ -35,7 +36,8 @@ func middlewareLog(next http.Handler) http.Handler {
 
 func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Body string `json:"body"`
+		Body        string `json:"body"`
+		CleanedBody string `json:"cleaned_body"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -57,9 +59,28 @@ func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"error": "Chirp is too long"}`))
 		return
 	}
-	w.WriteHeader(200)
-	w.Write([]byte(`{"valid": true}`))
+	// check if the body contains any words such as "kerfuffle" "sharbert" "fornax"
+	forbiddenWords := []string{"kerfuffle", "sharbert", "fornax", "Kerfuffle", "Sharbert", "Fornax"}
+	_, cleanedBody := maskForbiddenWord(params.Body, forbiddenWords)
+	response := map[string]interface{}{
+		"valid": true,
+	}
+	response["cleaned_body"] = cleanedBody
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
 
+func maskForbiddenWord(body string, forbiddenWords []string) (bool, string) {
+	bodyLower := strings.ToLower(body)
+	containsForbiddenWord := false
+	for _, word := range forbiddenWords {
+		if strings.Contains(bodyLower, strings.ToLower(word)) {
+			body = strings.ReplaceAll(body, word, "****")
+			containsForbiddenWord = true
+		}
+	}
+	return containsForbiddenWord, body
 }
 
 func main() {
