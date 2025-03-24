@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -32,6 +33,35 @@ func middlewareLog(next http.Handler) http.Handler {
 	})
 }
 
+func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
+	type parameters struct {
+		Body string `json:"body"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		// an error will be thrown if the JSON is invalid or has the wrong types
+		// any missing fields will simply have their values in the struct set to their zero value
+		log.Printf("Error decoding parameters: %s", err)
+		w.WriteHeader(500)
+		// Add a message to the response body "error": "Something went wrong"
+		w.Write([]byte(`{"error": "Something went wrong"}`))
+		return
+	}
+	if len(params.Body) > 140 {
+		// If the body is too long, return a 400 Bad Request
+		w.WriteHeader(400)
+		// Add a message to the response body "error": "Chirp is too long"
+		w.Write([]byte(`{"error": "Chirp is too long"}`))
+		return
+	}
+	w.WriteHeader(200)
+	w.Write([]byte(`{"valid": true}`))
+
+}
+
 func main() {
 	apiCfg := &apiConfig{}
 	fmt.Fprintln(os.Stdout, "Hitting:", apiCfg.fileserverHits.Load())
@@ -61,6 +91,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+	mux.HandleFunc("POST /api/validate_chirp", handlerValidateChirp)
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: mux,
