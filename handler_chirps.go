@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -19,27 +18,18 @@ func (cfg *apiConfig) handlerCreateChip(w http.ResponseWriter, r *http.Request) 
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
-		// an error will be thrown if the JSON is invalid or has the wrong types
-		// any missing fields will simply have their values in the struct set to their zero value
-		log.Printf("Error decoding parameters: %s", err)
-		w.WriteHeader(500)
-		// Add a message to the response body "error": "Something went wrong"
-		w.Write([]byte(`{"error": "Something went wrong"}`))
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
 		return
 	}
 	if len(params.Body) > 140 {
 		// If the body is too long, return a 400 Bad Request
-		w.WriteHeader(400)
-		// Add a message to the response body "error": "Chirp is too long"
-		w.Write([]byte(`{"error": "Chirp is too long"}`))
+		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
 		return
 	}
 	// Create a new chirp with apiCfg.db.CreateChirp
 	userID, err := uuid.Parse(params.UserID)
 	if err != nil {
-		log.Printf("Error parsing UserID: %s", err)
-		w.WriteHeader(400)
-		w.Write([]byte(`{"error": "Invalid UserID format"}`))
+		respondWithError(w, http.StatusBadRequest, "Invalid UserID format", err)
 		return
 	}
 
@@ -49,9 +39,7 @@ func (cfg *apiConfig) handlerCreateChip(w http.ResponseWriter, r *http.Request) 
 	})
 
 	if err != nil {
-		log.Printf("Error creating chirp: %s", err)
-		w.WriteHeader(500)
-		w.Write([]byte(`{"error": "Something went wrong"}`))
+		respondWithError(w, http.StatusInternalServerError, "Error creating chirp", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
