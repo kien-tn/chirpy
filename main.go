@@ -124,11 +124,16 @@ func main() {
 </html>`, apiCfg.fileserverHits.Load())))
 	})))
 	mux.HandleFunc("POST /admin/reset", func(w http.ResponseWriter, r *http.Request) {
-		apiCfg.fileserverHits.Store(0)
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		// apiCfg.fileserverHits.Store(0)
+		// w.WriteHeader(http.StatusOK)
+		// w.Write([]byte("OK"))
+		handlerUsersReset(apiCfg, w, r)
 	})
 	mux.HandleFunc("POST /api/validate_chirp", handlerValidateChirp)
+	mux.HandleFunc("POST /api/users", func(w http.ResponseWriter, r *http.Request) {
+		handlerUsers(apiCfg, w, r)
+	})
+	mux.HandleFunc("POST /api/chirps", apiCfg.handlerCreateChip)
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: mux,
