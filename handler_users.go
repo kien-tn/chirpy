@@ -5,15 +5,27 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	"github.com/kien-tn/chirpy/internal/auth"
+	"github.com/kien-tn/chirpy/internal/database"
 )
+
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
 
 func handlerUsers(apiCfg *apiConfig, w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Password string `json:"password"`
 		Email    string `json:"email"`
 	}
+	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
 	err := decoder.Decode(&params)
@@ -23,8 +35,21 @@ func handlerUsers(apiCfg *apiConfig, w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"error": "Invalid request payload"}`))
 		return
 	}
+	if params.Password == "" || params.Email == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error": "Email and password are required"}`))
+		return
+	}
+	hashedPass, err := auth.HashPassword(params.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error hashing password", err)
+		return
+	}
 	// create a new user with apiCfg.db.CreateUser
-	u, err := apiCfg.db.CreateUser(r.Context(), params.Email)
+	u, err := apiCfg.db.CreateUser(r.Context(), database.CreateUserParams{
+		Email:          params.Email,
+		HashedPassword: hashedPass,
+	})
 	if err != nil {
 		log.Printf("Error creating user: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
