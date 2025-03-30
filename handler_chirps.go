@@ -2,11 +2,21 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/kien-tn/chirpy/internal/database"
 )
+
+type Chirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	UserID    uuid.UUID `json:"user_id"`
+	Body      string    `json:"body"`
+}
 
 func (cfg *apiConfig) handlerCreateChip(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
@@ -50,5 +60,46 @@ func (cfg *apiConfig) handlerCreateChip(w http.ResponseWriter, r *http.Request) 
 		"updated_at": c.UpdatedAt,
 		"body":       c.Body,
 		"user_id":    c.UserID,
+	})
+}
+
+func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request) {
+	output := []Chirp{}
+	chirps, err := cfg.db.GetAllChirps(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error getting chirps", err)
+		return
+	}
+	for _, c := range chirps {
+		output = append(output, Chirp{
+			ID:        c.ID,
+			CreatedAt: c.CreatedAt,
+			UpdatedAt: c.UpdatedAt,
+			Body:      c.Body,
+			UserID:    c.UserID,
+		})
+	}
+	respondWithJSON(w, http.StatusOK, output)
+}
+
+func (cfg *apiConfig) handlerGetChirpById(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("chirp_id")
+	log.Println("chirp ID found in request path: ", id)
+	chirpID, err := uuid.Parse(id)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid chirp ID format", err)
+		return
+	}
+	c, err := cfg.db.GetChirpByID(r.Context(), chirpID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error getting chirp", err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, Chirp{
+		ID:        c.ID,
+		CreatedAt: c.CreatedAt,
+		UpdatedAt: c.UpdatedAt,
+		Body:      c.Body,
+		UserID:    c.UserID,
 	})
 }
