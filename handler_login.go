@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kien-tn/chirpy/internal/auth"
+	"github.com/kien-tn/chirpy/internal/database"
 )
 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
@@ -49,11 +50,72 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "Error creating token", err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, User{
-		ID:        u.ID,
-		CreatedAt: u.CreatedAt,
-		UpdatedAt: u.UpdatedAt,
-		Email:     u.Email,
-		Token:     token,
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error creating refresh token", err)
+		return
+	}
+	_, err = cfg.db.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token:     refreshToken,
+		UserID:    u.ID,
+		ExpiredAt: time.Now().Add(24 * 60 * time.Hour),
 	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error creating refresh token", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, User{
+		ID:           u.ID,
+		CreatedAt:    u.CreatedAt,
+		UpdatedAt:    u.UpdatedAt,
+		Email:        u.Email,
+		Token:        token,
+		RefreshToken: refreshToken,
+	})
+}
+
+func (cfg *apiConfig) handlerRefreshToken(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Authorization header required", err)
+		return
+	}
+	rt, err := cfg.db.GetUserFromRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid refresh token", err)
+		return
+	}
+	if rt.RevokedAt.Valid {
+		respondWithError(w, http.StatusUnauthorized, "Refresh token revoked", nil)
+		return
+	}
+	if rt.ExpiredAt.Before(time.Now()) {
+		respondWithError(w, http.StatusUnauthorized, "Refresh token expired", nil)
+		return
+	}
+	token, err := auth.MakeJWT(rt.UserID, cfg.secretKey, 3600*time.Second)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error creating token", err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"token": token,
+	})
+}
+
+func (cfg *apiConfig) handlerRevokeRefreshToken(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Authorization header required", err)
+		return
+	}
+	_, err = cfg.db.RevokeRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error revoking refresh token", err)
+		return
+	}
+	// respond with a 204 No Content
+	w.WriteHeader(http.StatusNoContent)
+
 }
