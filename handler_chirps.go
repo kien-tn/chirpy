@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/kien-tn/chirpy/internal/auth"
 	"github.com/kien-tn/chirpy/internal/database"
 )
 
@@ -20,8 +21,7 @@ type Chirp struct {
 
 func (cfg *apiConfig) handlerCreateChip(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Body   string `json:"body"`
-		UserID string `json:"user_id"`
+		Body string `json:"body"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -37,9 +37,10 @@ func (cfg *apiConfig) handlerCreateChip(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	// Create a new chirp with apiCfg.db.CreateChirp
-	userID, err := uuid.Parse(params.UserID)
+	token, _ := auth.GetBearerToken(r.Header)
+	userID, err := auth.ValidateJWT(token, cfg.secretKey)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid UserID format", err)
+		respondWithError(w, http.StatusUnauthorized, "Invalid token, missing UserID", err)
 		return
 	}
 

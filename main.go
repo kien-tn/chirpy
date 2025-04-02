@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/joho/godotenv"
+	"github.com/kien-tn/chirpy/internal/auth"
 	"github.com/kien-tn/chirpy/internal/database"
 	_ "github.com/lib/pq"
 )
@@ -18,6 +19,7 @@ import (
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
+	secretKey      string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -36,6 +38,24 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 func middlewareLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s", r.Method, r.URL.Path)
+		next.ServeHTTP(w, r)
+	})
+}
+func middlewareValidateJWT(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check the Authorization header for a JWT
+		token, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			respondWithError(w, http.StatusUnauthorized, "Authorization header required", nil)
+			return
+		}
+		// Check if the JWT is valid
+		_, err = auth.ValidateJWT(token, os.Getenv("SECRET_KEY"))
+		if err != nil {
+			respondWithError(w, http.StatusUnauthorized, "Invalid token", err)
+			return
+		}
+		// Call the next handler in the chain
 		next.ServeHTTP(w, r)
 	})
 }
@@ -98,7 +118,8 @@ func main() {
 	}
 	dbQueries := database.New(db)
 	apiCfg := &apiConfig{
-		db: dbQueries,
+		db:        dbQueries,
+		secretKey: os.Getenv("SECRET_KEY"),
 	}
 	defer db.Close()
 	fmt.Fprintln(os.Stdout, "Hitting:", apiCfg.fileserverHits.Load())
@@ -133,7 +154,7 @@ func main() {
 	mux.HandleFunc("POST /api/users", func(w http.ResponseWriter, r *http.Request) {
 		handlerUsers(apiCfg, w, r)
 	})
-	mux.HandleFunc("POST /api/chirps", apiCfg.handlerCreateChip)
+	mux.Handle("POST /api/chirps", middlewareValidateJWT(http.HandlerFunc(apiCfg.handlerCreateChip)))
 	mux.HandleFunc("GET /api/chirps", apiCfg.handlerGetAllChirps)
 	mux.HandleFunc("GET /api/chirps/{chirp_id}", apiCfg.handlerGetChirpById)
 	mux.HandleFunc("POST /api/login", apiCfg.handlerLogin)
