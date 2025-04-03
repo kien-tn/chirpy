@@ -154,6 +154,7 @@ func main() {
 	mux.HandleFunc("POST /api/users", func(w http.ResponseWriter, r *http.Request) {
 		handlerUsers(apiCfg, w, r)
 	})
+	mux.Handle("PUT /api/users", middlewareValidateJWT(http.HandlerFunc(apiCfg.handlerUpdateUsers)))
 	mux.Handle("POST /api/chirps", middlewareValidateJWT(http.HandlerFunc(apiCfg.handlerCreateChip)))
 	mux.HandleFunc("GET /api/chirps", apiCfg.handlerGetAllChirps)
 	mux.HandleFunc("GET /api/chirps/{chirp_id}", apiCfg.handlerGetChirpById)
