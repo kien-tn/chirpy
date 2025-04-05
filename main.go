@@ -158,6 +158,7 @@ func main() {
 	mux.Handle("POST /api/chirps", middlewareValidateJWT(http.HandlerFunc(apiCfg.handlerCreateChip)))
 	mux.HandleFunc("GET /api/chirps", apiCfg.handlerGetAllChirps)
 	mux.HandleFunc("GET /api/chirps/{chirp_id}", apiCfg.handlerGetChirpById)
+	mux.Handle("DELETE /api/chirps/{chirp_id}", middlewareValidateJWT(http.HandlerFunc(apiCfg.handlerDeleteChirp)))
 	mux.HandleFunc("POST /api/login", apiCfg.handlerLogin)
 	mux.HandleFunc("POST /api/refresh", apiCfg.handlerRefreshToken)
 	mux.HandleFunc("POST /api/revoke", apiCfg.handlerRevokeRefreshToken)
