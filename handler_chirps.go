@@ -66,10 +66,27 @@ func (cfg *apiConfig) handlerCreateChip(w http.ResponseWriter, r *http.Request) 
 
 func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request) {
 	output := []Chirp{}
-	chirps, err := cfg.db.GetAllChirps(r.Context())
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Error getting chirps", err)
-		return
+	var chirps []database.Chirp
+	var err error
+	s := r.URL.Query().Get("author_id")
+	log.Println("author_id found in request path: ", s)
+	if s != "" {
+		authorID, err := uuid.Parse(s)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid author ID format", err)
+			return
+		}
+		chirps, err = cfg.db.GetChirpsByUserID(r.Context(), authorID)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Error getting chirps", err)
+			return
+		}
+	} else {
+		chirps, err = cfg.db.GetAllChirps(r.Context())
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Error getting chirps", err)
+			return
+		}
 	}
 	for _, c := range chirps {
 		output = append(output, Chirp{
