@@ -20,6 +20,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
 	secretKey      string
+	polkaKey       string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -120,6 +121,7 @@ func main() {
 	apiCfg := &apiConfig{
 		db:        dbQueries,
 		secretKey: os.Getenv("SECRET_KEY"),
+		polkaKey:  os.Getenv("POLKA_KEY"),
 	}
 	defer db.Close()
 	fmt.Fprintln(os.Stdout, "Hitting:", apiCfg.fileserverHits.Load())
@@ -162,6 +164,7 @@ func main() {
 	mux.HandleFunc("POST /api/login", apiCfg.handlerLogin)
 	mux.HandleFunc("POST /api/refresh", apiCfg.handlerRefreshToken)
 	mux.HandleFunc("POST /api/revoke", apiCfg.handlerRevokeRefreshToken)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.handlerUpdateUserRed)
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: mux,

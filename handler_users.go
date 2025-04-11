@@ -20,6 +20,7 @@ type User struct {
 	Email        string    `json:"email"`
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
+	IsChirpyRed  bool      `json:"is_chirpy_red"`
 }
 
 func handlerUsers(apiCfg *apiConfig, w http.ResponseWriter, r *http.Request) {
@@ -61,10 +62,11 @@ func handlerUsers(apiCfg *apiConfig, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"id":         u.ID,
-		"created_at": u.CreatedAt,
-		"updated_at": u.UpdatedAt,
-		"email":      u.Email,
+		"id":            u.ID,
+		"created_at":    u.CreatedAt,
+		"updated_at":    u.UpdatedAt,
+		"email":         u.Email,
+		"is_chirpy_red": u.IsChirpyRed,
 	})
 }
 
@@ -129,9 +131,57 @@ func (cfg *apiConfig) handlerUpdateUsers(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, User{
-		ID:        u.ID,
-		CreatedAt: u.CreatedAt,
-		UpdatedAt: u.UpdatedAt,
-		Email:     u.Email,
+		ID:          u.ID,
+		CreatedAt:   u.CreatedAt,
+		UpdatedAt:   u.UpdatedAt,
+		Email:       u.Email,
+		IsChirpyRed: u.IsChirpyRed,
 	})
+}
+
+func (cfg *apiConfig) handlerUpdateUserRed(w http.ResponseWriter, r *http.Request) {
+	type inner struct {
+		UserID uuid.UUID `json:"user_id"`
+	}
+	type parameters struct {
+		Event string `json:"event"`
+		Data  inner  `json:"data"`
+	}
+	defer r.Body.Close()
+	//Check API key
+	polkaKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid API key", err)
+		return
+	}
+	if polkaKey != cfg.polkaKey {
+		respondWithError(w, http.StatusUnauthorized, "Invalid API key", nil)
+		return
+	}
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	err = decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Error decoding parameters", err)
+		return
+	}
+	if params.Event != "user.upgraded" {
+		respondWithJSON(w, http.StatusNoContent, nil)
+		return
+	} else {
+		if params.Data.UserID == uuid.Nil {
+			respondWithError(w, http.StatusNotFound, "User ID is required", nil)
+			return
+		}
+		u, err := cfg.db.UpdateUserChirpyRed(r.Context(), params.Data.UserID)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Error updating user", err)
+			return
+		}
+		respondWithJSON(w, http.StatusNoContent, map[string]interface{}{
+			"id":            u.ID,
+			"is_chirpy_red": u.IsChirpyRed,
+		})
+	}
+
 }
