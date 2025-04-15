@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -87,6 +88,16 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 			respondWithError(w, http.StatusInternalServerError, "Error getting chirps", err)
 			return
 		}
+	}
+	sortQuery := r.URL.Query().Get("sort")
+	if sortQuery == "desc" {
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+		})
+	} else {
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].CreatedAt.Before(chirps[j].CreatedAt)
+		})
 	}
 	for _, c := range chirps {
 		output = append(output, Chirp{
